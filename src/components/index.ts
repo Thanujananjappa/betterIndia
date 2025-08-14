@@ -1,7 +1,9 @@
 export { default as Header } from './Header';
 export { default as Navigation } from './Navigation';
 export { default as Dashboard } from './Dashboard';
-export { default as ReportAgent } from './ReportAgent';
-export { default as MatchAgent } from './MatchAgent';
+export { default as ReportAgent } from './ReportAgent/ReportAgent';
+export { default as MatchingAgent } from './MatchingAgent/MatchingAgent';
+export { default as CommunityAgent } from './CommunityAgent/CommunityAgent';
+export { default as AlertAgent } from './AlertAgent/AlertAgent';
 export { default as CameraNetwork } from './CameraNetwork';
 export { default as SupportCenter } from './SupportCenter';

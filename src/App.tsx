@@ -4,7 +4,9 @@ import {
   Navigation,
   Dashboard,
   ReportAgent,
-  MatchAgent,
+  MatchingAgent,
+  CommunityAgent,
+  AlertAgent,
   CameraNetwork,
   SupportCenter
 } from './components';
@@ -20,7 +22,11 @@ function App() {
       case 'report':
         return <ReportAgent />;
       case 'match':
-        return <MatchAgent />;
+        return <MatchingAgent />;
+      case 'community':
+        return <CommunityAgent />;
+      case 'alert':
+        return <AlertAgent />;
       case 'camera':
         return <CameraNetwork />;
       case 'support':

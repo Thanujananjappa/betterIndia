@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, MessageSquare, Search, Camera, Heart } from 'lucide-react';
+import { Eye, MessageSquare, Search, Users, Bell, Camera, Heart } from 'lucide-react';
 
 interface NavigationProps {
   activeTab: string;
@@ -10,7 +10,9 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Eye },
     { id: 'report', label: 'Report Agent', icon: MessageSquare },
-    { id: 'match', label: 'Match Agent', icon: Search },
+    { id: 'match', label: 'Matching Agent', icon: Search },
+    { id: 'community', label: 'Community Agent', icon: Users },
+    { id: 'alert', label: 'Alert Agent', icon: Bell },
     { id: 'camera', label: 'Camera Network', icon: Camera },
     { id: 'support', label: 'Support Center', icon: Heart }
   ];
