@@ -48,7 +48,7 @@ export const authorize = (...roles: string[]) => {
 };
 
 export const generateToken = (id: string): string => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback-secret', {
-    expiresIn: process.env.JWT_EXPIRE || '30d'
-  });
+  const secret = (process.env.JWT_SECRET || 'fallback-secret') as jwt.Secret;
+  const expiresIn = (process.env.JWT_EXPIRE || '30d') as any;
+  return jwt.sign({ id }, secret, { expiresIn });
 };

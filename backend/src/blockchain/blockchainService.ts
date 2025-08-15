@@ -16,9 +16,9 @@ export interface BlockchainConfig {
 }
 
 export class BlockchainService {
-  private provider: ethers.JsonRpcProvider;
-  private wallet: ethers.Wallet;
-  private contract: ethers.Contract;
+  private provider!: ethers.JsonRpcProvider;
+  private wallet!: ethers.Wallet;
+  private contract!: ethers.Contract;
   private isConnected: boolean = false;
 
   constructor(config: BlockchainConfig) {
@@ -38,6 +38,13 @@ export class BlockchainService {
     }
   }
 
+  private getContract(): ethers.Contract {
+    if (!this.isConnected || !this.contract) {
+      throw new Error('Blockchain service not connected');
+    }
+    return this.contract;
+    }
+
   /**
    * Store missing person data hash on blockchain
    */
@@ -49,7 +56,7 @@ export class BlockchainService {
     try {
       console.log(`🔗 Storing data hash on blockchain: ${dataHash}`);
       
-      const tx = await this.contract.storeMissingPersonData(dataHash, metadata);
+      const tx = await (this.getContract() as any).storeMissingPersonData(dataHash, metadata);
       const receipt = await tx.wait();
       
       console.log(`✅ Data hash stored successfully. Transaction: ${receipt.hash}`);
@@ -70,7 +77,7 @@ export class BlockchainService {
     }
 
     try {
-      const data = await this.contract.getMissingPersonData(dataHash);
+      const data = await (this.getContract() as any).getMissingPersonData(dataHash);
       return data;
     } catch (error) {
       console.error('❌ Failed to retrieve data from blockchain:', error);
@@ -87,7 +94,7 @@ export class BlockchainService {
     }
 
     try {
-      const isValid = await this.contract.verifyDataIntegrity(dataHash);
+      const isValid = await (this.getContract() as any).verifyDataIntegrity(dataHash);
       return isValid;
     } catch (error) {
       console.error('❌ Failed to verify data integrity:', error);
@@ -113,7 +120,7 @@ export class BlockchainService {
 
     try {
       const network = await this.provider.getNetwork();
-      const balance = await this.wallet.getBalance();
+      const balance = await this.provider.getBalance(this.wallet.address);
       
       return {
         connected: true,
@@ -124,7 +131,7 @@ export class BlockchainService {
       };
     } catch (error) {
       console.error('❌ Failed to get network info:', error);
-      return { connected: false, error: error.message };
+      return { connected: false, error: (error as any)?.message };
     }
   }
 

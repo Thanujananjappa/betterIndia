@@ -1,5 +1,5 @@
 import twilio from 'twilio';
-import { MissingPerson } from '../models/MissingPerson';
+import MissingPerson from '../models/MissingPerson';
 import { BlockchainService } from '../blockchain/blockchainService';
 
 export interface WhatsAppMessage {
@@ -117,11 +117,11 @@ export class WhatsAppService {
       await missingPerson.save();
 
       // Send confirmation message
-      await this.sendConfirmationMessage(message.from, missingPerson._id.toString(), detectedLanguage);
+      await this.sendConfirmationMessage(message.from, (missingPerson._id as any).toString(), detectedLanguage);
 
       return {
         success: true,
-        reportId: missingPerson._id.toString(),
+        reportId: (missingPerson._id as any).toString(),
         message: this.getResponseMessage('report_created', detectedLanguage),
         confidence: extractedInfo.confidence
       };
@@ -144,12 +144,12 @@ export class WhatsAppService {
     // For now, using basic pattern matching
     
     const patterns = {
-      name: /(?:name|नाम|பெயர்|పేరు)\s*[:\-]?\s*([^\n,]+)/i,
-      age: /(?:age|उम्र|வயது|వయస్సు)\s*[:\-]?\s*(\d+)/i,
-      gender: /(?:gender|लिंग|பாலினம்|లింగం)\s*[:\-]?\s*(male|female|पुरुष|महिला|ஆண்|பெண்|మగ|అమ్మాయి)/i,
-      location: /(?:location|स्थान|இடம்|ప్రదేశం)\s*[:\-]?\s*([^\n,]+)/i,
-      lastSeen: /(?:last seen|last|अंतिम|கடைசி|చివరి)\s*[:\-]?\s*([^\n,]+)/i
-    };
+      name: /(?:name|नाम|பெயர்|పేరు)\s*[:\-]?\s*([^\n,]+)/i as RegExp,
+      age: /(?:age|उम्र|வயது|వయస్సు)\s*[:\-]?\s*(\d+)/i as RegExp,
+      gender: /(?:gender|लिंग|பாலினம்|లింగం)\s*[:\-]?\s*(male|female|पुरुष|महिला|ஆண்|பெண்|మగ|అమ్మాయి)/i as RegExp,
+      location: /(?:location|स्थान|இடம்|ప్రదేశం)\s*[:\-]?\s*([^\n,]+)/i as RegExp,
+      lastSeen: /(?:last seen|last|अंतिम|கடைசி|చివరి)\s*[:\-]?\s*([^\n,]+)/i as RegExp
+    } as const;
 
     const extracted = {
       name: '',
@@ -174,7 +174,7 @@ export class WhatsAppService {
     // Extract name
     const nameMatch = text.match(patterns.name);
     if (nameMatch) {
-      extracted.name = nameMatch[1].trim();
+      extracted.name = (nameMatch[1] as string).trim();
       confidence += 25;
       validFields++;
     }
@@ -182,7 +182,7 @@ export class WhatsAppService {
     // Extract age
     const ageMatch = text.match(patterns.age);
     if (ageMatch) {
-      extracted.age = parseInt(ageMatch[1]);
+      extracted.age = parseInt(ageMatch[1] as string);
       confidence += 20;
       validFields++;
     }
@@ -190,7 +190,7 @@ export class WhatsAppService {
     // Extract location
     const locationMatch = text.match(patterns.location);
     if (locationMatch) {
-      extracted.location = locationMatch[1].trim();
+      extracted.location = (locationMatch[1] as string).trim();
       confidence += 25;
       validFields++;
     }
@@ -269,8 +269,8 @@ export class WhatsAppService {
   /**
    * Get response message in appropriate language
    */
-  private getResponseMessage(type: string, language: string): string {
-    const messages = {
+  private getResponseMessage(type: 'report_created' | 'invalid_format' | 'error_occurred', language: string): string {
+    const messages: Record<'report_created' | 'invalid_format' | 'error_occurred', Record<string, string>> = {
       report_created: {
         en: 'Thank you! Your missing person report has been received and is being processed. We will contact you soon.',
         hi: 'धन्यवाद! आपकी गुमशुदा व्यक्ति की रिपोर्ट प्राप्त हो गई है और प्रोसेस की जा रही है। हम जल्द ही आपसे संपर्क करेंगे।',
