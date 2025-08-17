@@ -1,30 +1,40 @@
-import { Request, Response, NextFunction } from 'express';
+// src/controllers/communityController.ts
+import { Request, Response } from "express";
+import { communityService } from "../services/communityService";
 
-export const getCommunityFeed = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  res.status(200).json({
-    success: true,
-    items: []
-  });
+// Community feed
+export const getCommunityFeed = async (_: Request, res: Response) => {
+  res.json(await communityService.getFeed());
+};
+export const postCommunityUpdate = async (req: Request, res: Response) => {
+  const { message } = req.body;
+  res.json(await communityService.createUpdate(message));
 };
 
-export const postCommunityUpdate = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { message } = req.body as { message: string };
-    if (!message) {
-      res.status(400).json({ success: false, message: 'Message is required' });
-      return;
-    }
-    res.status(201).json({ success: true, update: { message, createdAt: new Date() } });
-  } catch (error) {
-    next(error as any);
-  }
+// Members
+export const getCommunityMembers = async (_: Request, res: Response) => {
+  res.json(await communityService.getMembers());
 };
 
+// Camera requests
+export const getCameraRequests = async (_: Request, res: Response) => {
+  res.json(await communityService.getCameraRequests());
+};
+export const createCameraRequest = async (req: Request, res: Response) => {
+  const { location, reason } = req.body;
+  res.json(await communityService.addCameraRequest(location, reason));
+};
+export const updateCameraRequestStatus = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  res.json(await communityService.updateCameraRequestStatus(id, status));
+};
 
+// Campaigns
+export const getCampaigns = async (_: Request, res: Response) => {
+  res.json(await communityService.getCampaigns());
+};
+export const createCampaign = async (req: Request, res: Response) => {
+  const { title, description } = req.body;
+  res.json(await communityService.createCampaign(title, description));
+};
