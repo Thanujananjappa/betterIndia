@@ -1,54 +1,23 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { createError } from './errorHandler';
+import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+import User from "../models/User";
 
-export interface AuthRequest extends Request {
-  user?: any;
-}
+export const protect = async (req: any, res: Response, next: NextFunction) => {
+  let token;
 
-export const protect = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  let token: string | undefined;
+  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+    try {
+      token = req.headers.authorization.split(" ")[1];
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "secret");
 
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
+      req.user = await User.findById(decoded.id).select("-password");
+      next();
+    } catch (error) {
+      res.status(401).json({ message: "Not authorized" });
+    }
   }
 
   if (!token) {
-    next(createError('Not authorized to access this route', 401));
-    return;
+    res.status(401).json({ message: "Not authorized, no token" });
   }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    req.user = decoded;
-    next();
-  } catch (error) {
-    next(createError('Not authorized to access this route', 401));
-  }
-};
-
-export const authorize = (...roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      next(createError('User not found', 401));
-      return;
-    }
-
-    if (!roles.includes(req.user.role)) {
-      next(createError(`User role ${req.user.role} is not authorized to access this route`, 403));
-      return;
-    }
-
-    next();
-  };
-};
-
-export const generateToken = (id: string): string => {
-  const secret = (process.env.JWT_SECRET || 'fallback-secret') as jwt.Secret;
-  const expiresIn = (process.env.JWT_EXPIRE || '30d') as any;
-  return jwt.sign({ id }, secret, { expiresIn });
 };
