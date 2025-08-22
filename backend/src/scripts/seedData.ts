@@ -1,25 +1,43 @@
-import { connectDB } from '../utils/database';
-import { Police } from '../models/PoliceCase';
-import { NGO } from '../models/NGOCase';
-import { CCTV } from '../models/cctvCase';
+import mongoose from "mongoose";
+import { connectDB } from "../utils/database";
+import CommunityMember from "../models/CommunityMember";
+import Campaign from "../models/Campaign";
+import CameraRequest from "../models/CameraRequest";
 
 const seed = async () => {
-  await connectDB();
+  try {
+    await connectDB();
 
-  await Police.insertMany([
-    { stationName: 'Central Police Station', address: 'Main Street, City', contactNumber: '1234567890', jurisdictionArea: 'Central City' }
-  ]);
+    // Clear old data
+    await CommunityMember.deleteMany({});
+    await Campaign.deleteMany({});
+    await CameraRequest.deleteMany({});
 
-  await NGO.insertMany([
-    { name: 'Helping Hands', focusArea: 'Missing Persons', contactNumber: '9876543210', address: 'NGO Street, City' }
-  ]);
+    // Insert community members
+    await CommunityMember.insertMany([
+      { name: "Alice", role: "volunteer", location: "Mumbai" },
+      { name: "Bob", role: "member", location: "Delhi" },
+    ]);
 
-  await CCTV.insertMany([
-    { location: 'Central Railway Station', type: 'railway', ipAddress: '192.168.1.10', accessURL: 'http://cctv.local/railway' }
-  ]);
+    // Insert campaigns
+    await Campaign.insertMany([
+      { title: "Child Safety Awareness", location: "Hyderabad", participants: 50 },
+      { title: "Cyber Safety Training", location: "Pune", participants: 30 },
+    ]);
 
-  console.log('✅ Data seeded successfully');
-  process.exit();
+    // Insert camera requests
+    await CameraRequest.insertMany([
+      { cameraType: "CCTV", location: "Chennai", description: "Street corner", status: "pending" },
+      { cameraType: "Drone", location: "Bangalore", description: "Public park", status: "approved" },
+    ]);
+
+    console.log("✅ Community Data seeded successfully");
+  } catch (error) {
+    console.error("❌ Error seeding data:", error);
+  } finally {
+    await mongoose.connection.close();
+    process.exit(0);
+  }
 };
 
 seed();

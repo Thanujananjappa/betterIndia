@@ -1,5 +1,6 @@
+// src/App.tsx
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 // Components
 import {
@@ -71,32 +72,26 @@ function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   return (
-    <Router>
-      <Routes>
-        {/* ✅ Default route goes to dashboard */}
-        <Route path="/" element={<Navigate to="/dashboard" />} />
+    <Routes>
+      {/* ✅ Default route goes to dashboard */}
+      <Route path="/" element={<Navigate to="/dashboard" />} />
 
-        {/* Auth */}
-        <Route path="/login" element={<Login />} />
-        {/* ⚠️ Signup not global */}
+      {/* Auth */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} /> {/* ✅ fixed route */}
 
-        {/* Main App after login */}
-        <Route
-          path="/dashboard"
-          element={<AppLayout activeTab={activeTab} setActiveTab={setActiveTab} />}
-        />
+      {/* Main App after login */}
+      <Route
+        path="/dashboard"
+        element={<AppLayout activeTab={activeTab} setActiveTab={setActiveTab} />}
+      />
 
-        {/* Role-specific dashboards */}
-        <Route path="/dashboard/admin" element={<AdminDashboard />} />
-
-        {/* ✅ Community dashboard + signup inside */}
-        <Route path="/dashboard/community" element={<CommunityDashboard />} />
-        <Route path="/dashboard/community/signup" element={<Signup />} />
-
-        <Route path="/dashboard/ngo" element={<NGODashboard />} />
-        <Route path="/dashboard/police" element={<PoliceDashboard />} />
-      </Routes>
-    </Router>
+      {/* Role-specific dashboards */}
+      <Route path="/dashboard/admin" element={<AdminDashboard />} />
+      <Route path="/dashboard/community" element={<CommunityDashboard />} />
+      <Route path="/dashboard/ngo" element={<NGODashboard />} />
+      <Route path="/dashboard/police" element={<PoliceDashboard />} />
+    </Routes>
   );
 }
 

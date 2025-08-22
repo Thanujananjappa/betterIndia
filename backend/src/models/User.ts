@@ -1,102 +1,137 @@
-import mongoose, { Document, Schema } from 'mongoose';
-import bcrypt from 'bcryptjs';
+// src/models/User.ts
+import mongoose, { Document, Schema, Model, Types } from "mongoose";
+import bcrypt from "bcryptjs";
 
-export interface IUser extends Document {
+/* -------------------- User Types -------------------- */
+export type AppRole = "admin" | "ngo" | "police" | "citizen" | "community";
+export type VerificationStatus = "pending" | "verified";
+export type PoliceRole = "main" | "officer";
+
+export interface IUser {
   name: string;
   email: string;
   phone: string;
   password: string;
-  role: 'admin' | 'police' | 'ngo' | 'community' | 'family';
+  role: AppRole;
+
+  // Generic
   organization?: string;
-  location: string;
-  isVerified: boolean;
-  isActive: boolean;
-  lastLogin?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  comparePassword(candidatePassword: string): Promise<boolean>;
+  location?: string;
+
+  // Police-only
+  stationId?: string;
+  policeRole?: PoliceRole;
+  officialEmail?: string;
+  badgeNumber?: string;
+  idCardUrl?: string;
+  emailVerified?: boolean;
+
+  // NGO-only
+  ngoName?: string;
+  ngoRegNumber?: string;
+  ngoLicenseUrl?: string;
+
+  // Shared
+  verificationStatus?: VerificationStatus;
 }
 
-const userSchema = new Schema<IUser>({
-  name: {
-    type: String,
-    required: [true, 'Please add a name'],
-    trim: true,
-    maxlength: [50, 'Name cannot be more than 50 characters']
-  },
-  email: {
-    type: String,
-    required: [true, 'Please add an email'],
-    unique: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      'Please add a valid email'
-    ]
-  },
-  phone: {
-    type: String,
-    required: [true, 'Please add a phone number'],
-    unique: true,
-    match: [/^\+?[\d\s-]+$/, 'Please add a valid phone number']
-  },
-  password: {
-    type: String,
-    required: [true, 'Please add a password'],
-    minlength: [6, 'Password must be at least 6 characters'],
-    select: false
-  },
-  role: {
-    type: String,
-    required: [true, 'Please specify user role'],
-    enum: ['admin', 'police', 'ngo', 'community', 'family'],
-    default: 'community'
-  },
-  organization: {
-    type: String,
-    required: function(this: IUser) {
-      return ['police', 'ngo'].includes(this.role);
-    }
-  },
-  location: {
-    type: String,
-    required: [true, 'Please add a location'],
-    trim: true
-  },
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  lastLogin: {
-    type: Date
-  }
-}, {
-  timestamps: true
-});
+export interface IUserDocument extends IUser, Document<Types.ObjectId> {
+  _id: Types.ObjectId;
+  password: string; // always available internally
+  comparePassword(candidatePassword: string): Promise<boolean>;
 
-// Encrypt password using bcrypt
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    next();
-    return;
-  }
+  // Helper for auth middleware
+  isVerified: boolean;
+}
 
+/* -------------------- Schema -------------------- */
+const userSchema = new Schema<IUserDocument>(
+  {
+    name: { type: String, required: true, trim: true },
+
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, "Invalid email address"],
+    },
+
+    phone: { type: String, required: true, trim: true },
+
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+      select: false,
+    },
+
+    role: {
+      type: String,
+      required: true,
+      enum: ["admin", "ngo", "police", "citizen", "community"],
+    },
+
+    organization: { type: String },
+    location: { type: String },
+
+    /* --- Police-only fields --- */
+    stationId: { type: String },
+    policeRole: { type: String, enum: ["main", "officer"] },
+    officialEmail: { type: String, lowercase: true, trim: true },
+    badgeNumber: { type: String, trim: true },
+    idCardUrl: { type: String },
+    emailVerified: { type: Boolean, default: false },
+
+    /* --- NGO-only fields --- */
+    ngoName: { type: String, trim: true },
+    ngoRegNumber: { type: String, trim: true },
+    ngoLicenseUrl: { type: String },
+
+    /* --- Common Verification --- */
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "verified"],
+      default: "pending",
+    },
+  },
+  { timestamps: true }
+);
+
+/* Constraint: Only one "main" police per station */
+userSchema.index(
+  { stationId: 1, policeRole: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { policeRole: "main" },
+    name: "unique_main_police_per_station",
+  }
+);
+
+/* -------------------- Middleware -------------------- */
+userSchema.pre<IUserDocument>("save", async function (next) {
+  if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
-// Sign JWT and return
-userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-  return await bcrypt.compare(candidatePassword, this.password);
+/* -------------------- Methods -------------------- */
+userSchema.methods.comparePassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Create indexes
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ location: 1 });
+/* -------------------- Virtual / Getter -------------------- */
+userSchema.virtual("isVerified").get(function (this: IUserDocument) {
+  return this.verificationStatus === "verified";
+});
 
-export default mongoose.model<IUser>('User', userSchema);
+/* -------------------- Export -------------------- */
+const User: Model<IUserDocument> =
+  mongoose.models.User ||
+  mongoose.model<IUserDocument>("User", userSchema, "users");
+
+export default User;

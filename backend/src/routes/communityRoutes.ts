@@ -5,27 +5,39 @@ import {
   postCommunityUpdate,
   getCommunityMembers,
   getCameraRequests,
-  updateCameraRequestStatus,
   createCameraRequest,
+  updateCameraRequestStatus,
   getCampaigns,
   createCampaign,
 } from "../controllers/communityController";
 
 const router = Router();
 
-// Community feed
+/**
+ * @route   /api/community/feed
+ * @desc    Community feed routes
+ */
 router.get("/feed", getCommunityFeed);
 router.post("/feed", postCommunityUpdate);
 
-// Community members
+/**
+ * @route   /api/community/members
+ * @desc    Community members list
+ */
 router.get("/members", getCommunityMembers);
 
-// CCTV / camera access requests
+/**
+ * @route   /api/community/camera-requests
+ * @desc    CCTV / Camera access requests
+ */
 router.get("/camera-requests", getCameraRequests);
 router.post("/camera-requests", createCameraRequest);
-router.put("/camera-requests/:id", updateCameraRequestStatus); // ✅ Added PUT
+router.put("/camera-requests/:id", updateCameraRequestStatus);
 
-// Awareness campaigns
+/**
+ * @route   /api/community/campaigns
+ * @desc    Awareness campaigns
+ */
 router.get("/campaigns", getCampaigns);
 router.post("/campaigns", createCampaign);
 

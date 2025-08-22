@@ -1,23 +1,18 @@
 // src/services/ngoService.ts
-import axios from 'axios';
+import { NGO } from '../models/NGOCase';
 
-interface NGOCase {
-  id: string;
-  name: string;
-  age: number;
-  lastSeen: string;
-  description: string;
-  contactInfo: string;
-}
 
 export const ngoService = {
-  async getActiveCases(): Promise<NGOCase[]> {
-    try {
-      const response = await axios.get('https://your-ngo-api.org/missing-persons');
-      return response.data.cases;
-    } catch (error) {
-      console.error('Error fetching NGO cases:', error);
-      return [];
-    }
+  async getAll() {
+    return await NGO.find();
+  },
+  async getById(id: string) {
+    return await NGO.findById(id);
+  },
+  async search(name?: string, location?: string) {
+    const query: any = {};
+    if (name) query.name = { $regex: name, $options: 'i' };
+    if (location) query.address = { $regex: location, $options: 'i' };
+    return await NGO.find(query);
   }
 };

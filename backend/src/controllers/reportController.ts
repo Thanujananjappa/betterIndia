@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import MissingPerson, { IMissingPerson } from '../models/MissingPerson';
-import { createError } from '../middleware/errorHandler';
-import { AuthRequest } from '../middleware/auth';
+import { Request, Response, NextFunction } from "express";
+import MissingPerson, { IMissingPerson } from "../models/MissingPerson";
+import { createError } from "../middleware/errorHandler";
+import { AuthRequest } from "../middleware/auth";
 
 export const createReport = async (
   req: AuthRequest,
@@ -11,8 +11,15 @@ export const createReport = async (
   try {
     const body = req.body as Partial<IMissingPerson> & { photo?: string };
 
-    if (!body.name || typeof body.age !== 'number' || !body.gender || !body.lastSeen || !body.lastSeenLocation || !body.description) {
-      next(createError('Missing required report fields', 400));
+    if (
+      !body.name ||
+      typeof body.age !== "number" ||
+      !body.gender ||
+      !body.lastSeen ||
+      !body.lastSeenLocation ||
+      !body.description
+    ) {
+      next(createError("Missing required report fields", 400));
       return;
     }
 
@@ -23,25 +30,30 @@ export const createReport = async (
       lastSeen: new Date(body.lastSeen),
       lastSeenLocation: body.lastSeenLocation,
       coordinates: body.coordinates,
-      status: 'missing',
-      reportedBy: req.user?.id,
-      reportedByPhone: body.reportedByPhone || 'N/A',
+      status: "missing",
+      reportedBy: req.user?._id, // now valid because AuthRequest.user is IUserDocument
+      reportedByPhone: body.reportedByPhone || "N/A",
       reportedByEmail: body.reportedByEmail,
-      photo: body.photo || '',
+      photo: body.photo || "",
       description: body.description,
-      clothing: body.clothing || { color: 'unknown', type: 'unknown' },
-      physicalFeatures: body.physicalFeatures || { height: 'unknown', weight: 'unknown', hairColor: 'unknown', eyeColor: 'unknown' },
+      clothing: body.clothing || { color: "unknown", type: "unknown" },
+      physicalFeatures: body.physicalFeatures || {
+        height: "unknown",
+        weight: "unknown",
+        hairColor: "unknown",
+        eyeColor: "unknown",
+      },
       medicalInfo: body.medicalInfo,
-      languages: body.languages || ['English'],
-      priority: body.priority || 'medium',
+      languages: body.languages || ["English"],
+      priority: body.priority || "medium",
       agentActivity: [
         {
-          agent: 'report',
-          action: 'created',
+          agent: "report",
+          action: "created",
           timestamp: new Date(),
-          details: 'Report created via API'
-        }
-      ]
+          details: "Report created via API",
+        },
+      ],
     } as any);
 
     res.status(201).json({ success: true, report });
@@ -56,13 +68,21 @@ export const listReports = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { status, priority, q } = req.query as { status?: string; priority?: string; q?: string };
+    const { status, priority, q } = req.query as {
+      status?: string;
+      priority?: string;
+      q?: string;
+    };
+
     const filters: Record<string, any> = {};
     if (status) filters.status = status;
     if (priority) filters.priority = priority;
     if (q) filters.$text = { $search: q };
 
-    const reports = await MissingPerson.find(filters).sort({ createdAt: -1 }).limit(100);
+    const reports = await MissingPerson.find(filters)
+      .sort({ createdAt: -1 })
+      .limit(100);
+
     res.status(200).json({ success: true, count: reports.length, reports });
   } catch (error) {
     next(error as any);
@@ -77,7 +97,7 @@ export const getReportById = async (
   try {
     const report = await MissingPerson.findById(req.params.id);
     if (!report) {
-      next(createError('Report not found', 404));
+      next(createError("Report not found", 404));
       return;
     }
     res.status(200).json({ success: true, report });
@@ -91,25 +111,28 @@ export const updateReportStatus = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  try {
-    const { status } = req.body as { status: IMissingPerson['status'] };
-    if (!status) {
-      next(createError('Status is required', 400));
-      return;
+    try {
+      const { status } = req.body as { status: IMissingPerson["status"] };
+      if (!status) {
+        next(createError("Status is required", 400));
+        return;
+      }
+
+      const report = await MissingPerson.findByIdAndUpdate(
+        req.params.id,
+        { status },
+        { new: true }
+      );
+
+      if (!report) {
+        next(createError("Report not found", 404));
+        return;
+      }
+
+      res.status(200).json({ success: true, report });
+    } catch (error) {
+      next(error as any);
     }
-    const report = await MissingPerson.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
-    if (!report) {
-      next(createError('Report not found', 404));
-      return;
-    }
-    res.status(200).json({ success: true, report });
-  } catch (error) {
-    next(error as any);
-  }
 };
 
 export const addAgentActivity = async (
@@ -118,18 +141,28 @@ export const addAgentActivity = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { agent, action, details } = req.body as { agent: string; action: string; details?: string };
+    const { agent, action, details } = req.body as {
+      agent: string;
+      action: string;
+      details?: string;
+    };
+
     const report = await MissingPerson.findById(req.params.id);
     if (!report) {
-      next(createError('Report not found', 404));
+      next(createError("Report not found", 404));
       return;
     }
-    report.agentActivity.push({ agent, action, details, timestamp: new Date() } as any);
+
+    report.agentActivity.push({
+      agent,
+      action,
+      details,
+      timestamp: new Date(),
+    } as any);
+
     await report.save();
     res.status(200).json({ success: true, report });
   } catch (error) {
     next(error as any);
   }
 };
-
-
