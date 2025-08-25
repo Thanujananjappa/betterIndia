@@ -7,12 +7,10 @@ export interface AuthRequest extends Request {
   user?: IUserDocument | null;
 }
 
-// Structure of decoded JWT token
 interface DecodedToken extends JwtPayload {
   id: string;
 }
 
-// ✅ Ensure JWT_SECRET exists at startup, not runtime
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("❌ JWT_SECRET is not defined in environment variables");
@@ -39,7 +37,6 @@ export const protect = async (
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken;
-
     if (!decoded?.id) {
       res.status(401).json({ message: "Invalid token payload" });
       return;
@@ -59,13 +56,13 @@ export const protect = async (
   }
 };
 
-// Middleware to require verified users only
+// Middleware for verified accounts
 export const requireVerified = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): void => {
-  if (!req.user?.isVerified) {
+  if (!req.user || req.user.verificationStatus !== "verified") {
     res.status(403).json({ message: "User not verified" });
     return;
   }

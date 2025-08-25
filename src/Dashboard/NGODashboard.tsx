@@ -1,66 +1,64 @@
 import React, { useEffect, useState } from "react";
-import {
-  FileText,
-  Handshake,
-  Globe,
-  Upload,
-  AlertCircle,
-  CheckCircle2,
-  Search,
-  UserPlus,
-} from "lucide-react";
+import { CheckCircle2, Search, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import api from "../utils/api";
+import {
+  getMe,
+  getNgoPeople,
+  uploadNgoLicense,
+  uploadNgoBulkZip,
+} from "../utils/api";
 
 interface User {
+  _id: string;
   name: string;
   role: string;
-  status: "pending" | "verified" | "rejected";
+  verificationStatus: "pending" | "verified" | "rejected";
   ngoName?: string;
-  ngoRegNumber?: string;
-  ngoLicenseUrl?: string;
 }
+
+interface RawResident {
+  _id?: string;
+  name?: string;
+  age?: number | null;
+  gender?: string;
+  notes?: string;
+  address?: string;
+  photo?: { path?: string };
+}
+
+type PersonStatus = "missing" | "rescued" | "shelter";
 
 interface Person {
   _id: string;
   name: string;
-  age: number;
+  age: number | null;
   gender: string;
-  status: "missing" | "rescued" | "shelter";
+  status: PersonStatus;
   photoUrl?: string;
   description?: string;
   lastSeenLocation?: string;
 }
 
-const NGODashboard = () => {
+const NGODashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [file, setFile] = useState<File | null>(null);
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [people, setPeople] = useState<Person[]>([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "missing" | "rescued" | "shelter">("all");
+  const [bulkZip, setBulkZip] = useState<File | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
 
-  // Upload new person form state
-  const [form, setForm] = useState({
-    name: "",
-    age: "",
-    gender: "",
-    description: "",
-    lastSeenLocation: "",
-    status: "missing",
-    photo: null as File | null,
-  });
-
-  // Fetch current user
+  // Fetch logged in user
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await api.get("/auth/me");
-        setUser(res.data);
+        const res = await getMe();
+        setUser(res.data ?? res);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to fetch user", err);
         navigate("/login");
       } finally {
         setLoading(false);
@@ -69,245 +67,186 @@ const NGODashboard = () => {
     fetchUser();
   }, [navigate]);
 
-  // Fetch NGO people records
+  // Fetch NGO's residents
   const fetchPeople = async () => {
+    if (!user?._id) return;
     try {
-      const res = await api.get("/ngo/people");
-      setPeople(res.data);
+      const res = await getNgoPeople(user._id);
+      // ✅ Fix: unwrap correct array from backend response
+      const arr = (res.data?.data ?? []) as RawResident[];
+
+      setPeople(
+        arr.map((r, idx) => ({
+          _id: r._id || `res-${idx}`,
+          name: r.name || "Unnamed",
+          age: r.age ?? null,
+          gender: r.gender || "unspecified",
+          status: (r.notes?.split("|")[0] as PersonStatus) || "missing",
+          photoUrl: r.photo?.path,
+          description: r.notes?.split("|")[1] || "",
+          lastSeenLocation: r.address || "",
+        }))
+      );
     } catch (err) {
       console.error("Failed to fetch people", err);
+      setPeople([]);
     }
   };
 
   useEffect(() => {
-    if (user?.status === "verified") fetchPeople();
+    if (user?.verificationStatus === "verified") {
+      fetchPeople();
+    }
   }, [user]);
 
-  // Upload NGO license
+  // Upload NGO License
   const handleLicenseUpload = async () => {
-    if (!file) return alert("Please select a file first.");
+    if (!licenseFile) return alert("Please select a license file first.");
     try {
+      setUploading(true);
       const fd = new FormData();
-      fd.append("license", file);
-      await api.post("/ngo/upload-license", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      fd.append("license", licenseFile);
+      await uploadNgoLicense(fd);
       alert("License uploaded! Waiting for admin verification.");
-      setUser((prev) => (prev ? { ...prev, status: "pending" } : prev));
+      setUser((prev) =>
+        prev ? { ...prev, verificationStatus: "pending" } : prev
+      );
     } catch (err) {
       alert("Upload failed. Try again.");
+    } finally {
+      setUploading(false);
     }
   };
 
-  // Upload new person
-  const handlePersonUpload = async () => {
-    if (!form.name || !form.age || !form.gender || !form.photo) {
-      return alert("Please fill all required fields and add a photo.");
-    }
+  // Bulk Upload
+  const handleBulkUpload = async () => {
+    if (!bulkZip || !user?._id) return alert("Please select a ZIP file.");
 
     try {
+      setUploading(true);
+      setBulkMessage(null);
       const fd = new FormData();
-      Object.entries(form).forEach(([key, value]) => {
-        if (value) fd.append(key, value as any);
-      });
-      await api.post("/ngo/upload-person", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      alert("Person uploaded successfully!");
-      setForm({
-        name: "",
-        age: "",
-        gender: "",
-        description: "",
-        lastSeenLocation: "",
-        status: "missing",
-        photo: null,
-      });
-      fetchPeople();
+      fd.append("zip", bulkZip);
+
+      await uploadNgoBulkZip(user._id, fd);
+
+      setBulkZip(null);
+      await fetchPeople();
+      setBulkMessage("✅ Bulk import processed successfully!");
     } catch (err) {
-      alert("Upload failed. Try again.");
+      console.error("Bulk upload failed", err);
+      setBulkMessage(
+        "❌ Bulk import failed. Please check your ZIP structure (see help above)."
+      );
+    } finally {
+      setUploading(false);
     }
   };
 
   if (loading) return <p className="p-6">Loading...</p>;
+  const verified = user?.verificationStatus === "verified";
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">NGO Dashboard</h1>
+      <h1 className="text-2xl font-bold">
+        NGO Dashboard {user?.ngoName ? `- ${user.ngoName}` : ""}
+      </h1>
 
-      {/* Verification Banner */}
-      {user?.status === "pending" && (
-        <div className="p-4 border rounded-lg bg-yellow-50 text-yellow-800 flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
-          Your NGO account is pending admin verification. Please wait.
-        </div>
-      )}
-
-      {user?.status === "rejected" && (
-        <div className="p-4 border rounded-lg bg-red-50 text-red-800">
-          <p className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            Your NGO verification was <b>rejected</b>. Please re-upload your license.
+      {!verified && (
+        <div className="p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
+          <p>
+            Your NGO is not yet verified. Please upload your license for admin
+            approval.
           </p>
-          <div className="mt-3">
-            <input
-              type="file"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="mt-2 border p-2 rounded w-full"
-            />
-            <button
-              onClick={handleLicenseUpload}
-              className="mt-2 px-4 py-2 bg-green-600 text-white rounded"
-            >
-              Re-upload License
-            </button>
-          </div>
+          <input
+            type="file"
+            onChange={(e) => setLicenseFile(e.target.files?.[0] || null)}
+          />
+          <button
+            onClick={handleLicenseUpload}
+            disabled={uploading}
+            className="ml-2 px-3 py-1 bg-blue-600 text-white rounded"
+          >
+            Upload License
+          </button>
         </div>
       )}
 
-      {user?.status === "verified" && (
+      {verified && (
         <>
-          {/* Success Banner */}
-          <div className="p-4 border rounded-lg bg-green-50 text-green-800 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" />
-            Your NGO account is verified!
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatCard label="Total People" value={people.length} icon={<Users />} />
+            <StatCard
+              label="Missing"
+              value={people.filter((p) => p.status === "missing").length}
+              icon={<Search />}
+            />
+            <StatCard
+              label="Rescued"
+              value={people.filter((p) => p.status === "rescued").length}
+              icon={<CheckCircle2 />}
+            />
           </div>
 
-          {/* Upload Person Form */}
-          <div className="p-4 border rounded-xl shadow space-y-4">
-            <div className="flex items-center gap-2 text-purple-600">
-              <UserPlus className="w-6 h-6" />
-              <h2 className="font-semibold">Upload Person Details</h2>
-            </div>
-            <input
-              type="text"
-              placeholder="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="border p-2 rounded w-full"
-            />
-            <input
-              type="number"
-              placeholder="Age"
-              value={form.age}
-              onChange={(e) => setForm({ ...form, age: e.target.value })}
-              className="border p-2 rounded w-full"
-            />
-            <select
-              value={form.gender}
-              onChange={(e) => setForm({ ...form, gender: e.target.value })}
-              className="border p-2 rounded w-full"
-            >
-              <option value="">Select Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Last Seen Location"
-              value={form.lastSeenLocation}
-              onChange={(e) => setForm({ ...form, lastSeenLocation: e.target.value })}
-              className="border p-2 rounded w-full"
-            />
-            <textarea
-              placeholder="Description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="border p-2 rounded w-full"
-            />
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              className="border p-2 rounded w-full"
-            >
-              <option value="missing">Missing</option>
-              <option value="rescued">Rescued</option>
-              <option value="shelter">In Shelter</option>
-            </select>
+          {/* Help Box for ZIP Structure */}
+          <div className="p-4 bg-gray-100 rounded-lg border mt-6">
+            <h2 className="font-semibold mb-2">📦 Required ZIP Structure</h2>
+            <pre className="bg-white p-3 rounded text-sm overflow-auto">
+{`people.zip
+│
+├── data.csv   (columns: name, age, gender, status, description, lastSeenLocation, photoFileName)
+├── photos/
+│   ├── person1.jpg
+│   ├── person2.png
+│   └── ...
+`}
+            </pre>
+            <p className="text-sm text-gray-600 mt-2">
+              Ensure the <code>data.csv</code> has correct columns and photo file
+              names match.
+            </p>
+          </div>
+
+          {/* Bulk Upload */}
+          <div className="mt-6 space-y-3">
             <input
               type="file"
-              onChange={(e) => setForm({ ...form, photo: e.target.files?.[0] || null })}
-              className="border p-2 rounded w-full"
+              accept=".zip"
+              onChange={(e) => setBulkZip(e.target.files?.[0] || null)}
+              className="p-2 border rounded w-full"
             />
             <button
-              onClick={handlePersonUpload}
-              className="px-4 py-2 bg-green-600 text-white rounded"
+              onClick={handleBulkUpload}
+              disabled={uploading}
+              className="px-4 py-2 bg-purple-600 text-white rounded shadow hover:bg-purple-700"
             >
-              Upload Person
+              {uploading ? "Uploading..." : "Upload ZIP"}
             </button>
-          </div>
-
-          {/* Search + Filter */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="w-5 h-5 absolute left-2 top-2.5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search people..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border p-2 rounded pl-8 w-full"
-              />
-            </div>
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as any)}
-              className="border p-2 rounded"
-            >
-              <option value="all">All</option>
-              <option value="missing">Missing</option>
-              <option value="rescued">Rescued</option>
-              <option value="shelter">In Shelter</option>
-            </select>
-          </div>
-
-          {/* People Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-            {people
-              .filter((p) =>
-                p.name.toLowerCase().includes(search.toLowerCase())
-              )
-              .filter((p) => (filter === "all" ? true : p.status === filter))
-              .map((p) => (
-                <div key={p._id} className="p-4 border rounded-xl shadow hover:shadow-lg transition">
-                  {p.photoUrl && (
-                    <img
-                      src={p.photoUrl}
-                      alt={p.name}
-                      className="w-full h-40 object-cover rounded-lg"
-                    />
-                  )}
-                  <h3 className="mt-2 font-semibold">{p.name}</h3>
-                  <p className="text-gray-600 text-sm">
-                    {p.age} yrs | {p.gender}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">{p.description}</p>
-                  <span
-                    className={`inline-block mt-2 px-2 py-1 text-xs rounded ${
-                      p.status === "missing"
-                        ? "bg-red-100 text-red-600"
-                        : p.status === "rescued"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-blue-100 text-blue-600"
-                    }`}
-                  >
-                    {p.status}
-                  </span>
-                </div>
-              ))}
+            {bulkMessage && <p className="mt-2">{bulkMessage}</p>}
           </div>
         </>
       )}
-
-      {/* Back Button */}
-      <button
-        onClick={() => navigate("/dashboard")}
-        className="mt-6 px-6 py-2 bg-gray-800 text-white rounded"
-      >
-        ← Back to Main Dashboard
-      </button>
     </div>
   );
 };
 
 export default NGODashboard;
+
+const StatCard = ({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number;
+  icon?: React.ReactNode;
+}) => (
+  <div className="rounded-xl border p-4 bg-white shadow-sm flex items-center gap-3">
+    {icon && <div className="w-5 h-5">{icon}</div>}
+    <div>
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  </div>
+);

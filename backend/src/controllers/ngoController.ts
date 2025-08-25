@@ -1,31 +1,113 @@
-import { Request, Response } from 'express';
-import { ngoService } from '../services/ngoService';
+import { Request, Response } from "express";
+import AdmZip from "adm-zip";
+import csvParser from "csv-parser";
+import fs from "fs";
+import path from "path";
+import Resident from "../models/Resident";
 
-export const getAllNGOs = async (_req: Request, res: Response) => {
+/* =========================
+    Bulk Upload Residents ZIP
+   ========================= */
+export const uploadNgoBulkZip = async (req: Request, res: Response) => {
   try {
-    const ngos = await ngoService.getAll();
-    res.status(200).json({ success: true, ngos });
+    const { ngoId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "ZIP file is required" });
+    }
+    if (!ngoId) {
+      return res.status(400).json({ success: false, message: "NGO ID is required" });
+    }
+
+    // Unzip uploaded file
+    const zip = new AdmZip(req.file.path);
+    const extractPath = path.join(__dirname, "../uploads", Date.now().toString());
+    zip.extractAllTo(extractPath, true);
+
+    const residents: any[] = [];
+
+    // Read all extracted files
+    const files = fs.readdirSync(extractPath);
+    for (const file of files) {
+      if (file.endsWith(".csv")) {
+        const filePath = path.join(extractPath, file);
+        const rows: any[] = [];
+
+        // Parse CSV
+        await new Promise<void>((resolve, reject) => {
+          fs.createReadStream(filePath)
+            .pipe(csvParser())
+            .on("data", (row) => rows.push(row))
+            .on("end", resolve)
+            .on("error", reject);
+        });
+
+        // Map rows -> residents
+        rows.forEach((row) => {
+          residents.push({
+            name: row.name,
+            age: Number(row.age),
+            gender: row.gender,
+            status: row.status || "missing",
+            description: row.description,
+            lastSeenLocation: row.lastSeenLocation,
+            photoFileName: row.photoFileName,
+            ngoId: ngoId,
+          });
+        });
+      }
+    }
+
+    // Save to DB
+    if (residents.length > 0) {
+      await Resident.insertMany(residents);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Residents uploaded successfully",
+      count: residents.length,
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to fetch NGOs' });
+    console.error("Error bulk uploading residents:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-export const getNGOById = async (req: Request, res: Response) => {
+/* =========================
+    Fetch NGO Residents
+   ========================= */
+export const getNgoPeople = async (req: Request, res: Response) => {
   try {
-    const ngo = await ngoService.getById(req.params.id);
-    if (!ngo) return res.status(404).json({ success: false, message: 'NGO not found' });
-    res.status(200).json({ success: true, ngo });
+    const { ngoId } = req.params;
+    if (!ngoId) {
+      return res.status(400).json({ success: false, message: "NGO ID is required" });
+    }
+
+    const residents = await Resident.find({ ngoId });
+    return res.status(200).json({ success: true, residents });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to fetch NGO' });
+    console.error("Error fetching NGO people:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-export const searchNGOs = async (req: Request, res: Response) => {
+/* =========================
+    Upload NGO License (dummy)
+   ========================= */
+export const uploadNgoLicense = async (req: Request, res: Response) => {
   try {
-    const { name, location } = req.query;
-    const results = await ngoService.search(name as string, location as string);
-    res.status(200).json({ success: true, results });
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "License file is required" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "License uploaded successfully",
+      file: req.file.filename,
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to search NGOs' });
+    console.error("Error uploading NGO license:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };

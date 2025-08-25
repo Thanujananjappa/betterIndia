@@ -1,26 +1,20 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IMissingPerson extends Document {
   name: string;
   age: number;
-  gender: 'male' | 'female' | 'other';
+  gender: "male" | "female" | "other";
   lastSeen: Date;
   lastSeenLocation: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  status: 'missing' | 'investigating' | 'found' | 'closed';
+  coordinates?: { lat: number; lng: number };
+  status: "missing" | "investigating" | "found" | "closed";
   reportedBy: mongoose.Types.ObjectId;
+  reportedByRole: "police" | "ngo" | "community" | "family";
   reportedByPhone: string;
-  reportedByEmail?: string;
+  reportedByEmail?: string; // ✅ optional now
   photo: string;
   description: string;
-  clothing: {
-    color: string;
-    type: string;
-    details?: string;
-  };
+  clothing: { color: string; type: string; details?: string };
   physicalFeatures: {
     height: string;
     weight: string;
@@ -34,10 +28,10 @@ export interface IMissingPerson extends Document {
     allergies: string[];
   };
   languages: string[];
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: "low" | "medium" | "high" | "critical";
   blockchainHash?: string;
   agentActivity: Array<{
-    agent: string;
+    agent: "report" | "matching" | "community" | "alert";
     action: string;
     timestamp: Date;
     details?: string;
@@ -48,103 +42,41 @@ export interface IMissingPerson extends Document {
 
 const missingPersonSchema = new Schema<IMissingPerson>(
   {
-    name: {
-      type: String,
-      required: [true, 'Please add a name'],
-      trim: true,
-      maxlength: [100, 'Name cannot be more than 100 characters'],
-    },
-    age: {
-      type: Number,
-      required: [true, 'Please add an age'],
-      min: [0, 'Age must be positive'],
-      max: [120, 'Age cannot exceed 120'],
-    },
-    gender: {
-      type: String,
-      required: [true, 'Please specify gender'],
-      enum: ['male', 'female', 'other'],
-    },
-    lastSeen: {
-      type: Date,
-      required: [true, 'Please specify when the person was last seen'],
-    },
-    lastSeenLocation: {
-      type: String,
-      required: [true, 'Please specify the last seen location'],
-      trim: true,
-    },
+    name: { type: String, required: true, trim: true },
+    age: { type: Number, required: true, min: 0, max: 120 },
+    gender: { type: String, required: true, enum: ["male", "female", "other"] },
+    lastSeen: { type: Date, required: true },
+    lastSeenLocation: { type: String, required: true, trim: true },
     coordinates: {
-      lat: {
-        type: Number,
-        min: -90,
-        max: 90,
-      },
-      lng: {
-        type: Number,
-        min: -180,
-        max: 180,
-      },
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
     },
     status: {
       type: String,
-      required: true,
-      enum: ['missing', 'investigating', 'found', 'closed'],
-      default: 'missing',
-    },
-    reportedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      enum: ["missing", "investigating", "found", "closed"],
+      default: "missing",
       required: true,
     },
-    reportedByPhone: {
+    reportedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    reportedByRole: {
       type: String,
-      required: [true, 'Please add reporter phone number'],
+      enum: ["police", "ngo", "community", "family"],
+      required: true,
     },
-    reportedByEmail: {
-      type: String,
-      match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please add a valid email',
-      ],
-    },
-    photo: {
-      type: String,
-      required: [true, 'Please add a photo URL'],
-    },
-    description: {
-      type: String,
-      required: [true, 'Please add a description'],
-      maxlength: [1000, 'Description cannot exceed 1000 characters'],
-    },
+    reportedByPhone: { type: String, required: true },
+    reportedByEmail: { type: String }, // ✅ optional in schema
+    photo: { type: String, required: true },
+    description: { type: String, required: true },
     clothing: {
-      color: {
-        type: String,
-        required: [true, 'Please specify clothing color'],
-      },
-      type: {
-        type: String,
-        required: [true, 'Please specify clothing type'],
-      },
+      color: { type: String, required: true },
+      type: { type: String, required: true },
       details: String,
     },
     physicalFeatures: {
-      height: {
-        type: String,
-        required: [true, 'Please specify height'],
-      },
-      weight: {
-        type: String,
-        required: [true, 'Please specify weight'],
-      },
-      hairColor: {
-        type: String,
-        required: [true, 'Please specify hair color'],
-      },
-      eyeColor: {
-        type: String,
-        required: [true, 'Please specify eye color'],
-      },
+      height: { type: String, required: true },
+      weight: { type: String, required: true },
+      hairColor: { type: String, required: true },
+      eyeColor: { type: String, required: true },
       distinguishingMarks: [String],
     },
     medicalInfo: {
@@ -152,66 +84,34 @@ const missingPersonSchema = new Schema<IMissingPerson>(
       medications: [String],
       allergies: [String],
     },
-    languages: {
-      type: [String],
-      required: [true, 'Please specify languages spoken'],
-      default: ['English'],
-    },
+    languages: { type: [String], required: true, default: ["English"] },
     priority: {
       type: String,
+      enum: ["low", "medium", "high", "critical"],
       required: true,
-      enum: ['low', 'medium', 'high', 'critical'],
-      default: 'medium',
+      default: "medium",
     },
-    blockchainHash: {
-      type: String,
-      unique: true,
-      sparse: true,
-    },
+    blockchainHash: { type: String, unique: true, sparse: true },
     agentActivity: {
       type: [
         {
           agent: {
             type: String,
-            required: true,
-            enum: ['report', 'matching', 'community', 'alert'],
-          },
-          action: {
-            type: String,
+            enum: ["report", "matching", "community", "alert"],
             required: true,
           },
-          timestamp: {
-            type: Date,
-            default: Date.now,
-          },
+          action: { type: String, required: true },
+          timestamp: { type: Date, default: Date.now },
           details: String,
         },
       ],
-      default: [], // ✅ Ensures it's never undefined
+      default: [],
     },
   },
-  {
-    timestamps: true,
-    collection: 'missingpersons', // ✅ Explicit collection name
-  }
+  { timestamps: true, collection: "missingpersons" }
 );
 
-// Indexes
-missingPersonSchema.index({ status: 1 });
-missingPersonSchema.index({ priority: 1 });
-missingPersonSchema.index({ lastSeen: -1 });
-missingPersonSchema.index({ 'coordinates.lat': 1, 'coordinates.lng': 1 });
-missingPersonSchema.index({ reportedBy: 1 });
-
-// Text search index
-missingPersonSchema.index({
-  name: 'text',
-  description: 'text',
-  'clothing.details': 'text',
-  'physicalFeatures.distinguishingMarks': 'text',
-});
-
 export default mongoose.model<IMissingPerson>(
-  'MissingPerson',
+  "MissingPerson",
   missingPersonSchema
 );

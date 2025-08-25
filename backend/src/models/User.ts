@@ -1,4 +1,3 @@
-// src/models/User.ts
 import mongoose, { Document, Schema, Model, Types } from "mongoose";
 import bcrypt from "bcryptjs";
 
@@ -31,16 +30,20 @@ export interface IUser {
   ngoRegNumber?: string;
   ngoLicenseUrl?: string;
 
+  // Link user -> NGO document (optional)
+  ngoId?: Types.ObjectId;
+
   // Shared
   verificationStatus?: VerificationStatus;
+
+  // Auth / meta
+  lastLogin?: Date;
 }
 
 export interface IUserDocument extends IUser, Document<Types.ObjectId> {
   _id: Types.ObjectId;
-  password: string; // always available internally
+  password: string;
   comparePassword(candidatePassword: string): Promise<boolean>;
-
-  // Helper for auth middleware
   isVerified: boolean;
 }
 
@@ -89,12 +92,18 @@ const userSchema = new Schema<IUserDocument>(
     ngoRegNumber: { type: String, trim: true },
     ngoLicenseUrl: { type: String },
 
+    /* --- Reference to NGO doc (optional) --- */
+    ngoId: { type: Schema.Types.ObjectId, ref: "NGO" },
+
     /* --- Common Verification --- */
     verificationStatus: {
       type: String,
       enum: ["pending", "verified"],
       default: "pending",
     },
+
+    /* --- Auth/meta --- */
+    lastLogin: { type: Date },
   },
   { timestamps: true }
 );

@@ -1,33 +1,46 @@
 import axios, { InternalAxiosRequestConfig } from "axios";
 
-/**
- * Axios instance
- */
+/* =========================
+   Axios Instance
+   ========================= */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api",
+  baseURL: "http://localhost:5000/api", // backend base url
 });
 
-// ====== Request interceptor: attach bearer token ======
+/* =========================
+   Request Interceptor
+   ========================= */
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem("token");
     if (token) {
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
-      };
+      config.headers = config.headers || {};
+      (config.headers as any).Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// ====== Response interceptor ======
+/* =========================
+   Response Interceptor
+   ========================= */
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error("API Error:", error.response?.data || error.message);
-    return Promise.reject(error);
+    const status = error.response?.status;
+    if (status === 401) {
+      localStorage.clear();
+      window.location.href = "/login";
+    }
+    console.error("API Error:", {
+      status,
+      data: error.response?.data,
+      message: error.message,
+    });
+    return Promise.reject(
+      error.response?.data || { message: error.message, status }
+    );
   }
 );
 
@@ -42,22 +55,40 @@ export const loginUser = (data: { email: string; password: string }) =>
 
 export const getMe = () => api.get("/auth/me");
 
+/* =========================
+        NGO APIs
+   ========================= */
 export const uploadNgoLicense = (formData: FormData) =>
-  api.post("/auth/ngo/upload-license", formData);
+  api.post("/ngo/upload-license", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const uploadNgoBulkZip = (ngoId: string, formData: FormData) =>
+  api.post(`/ngo/${ngoId}/bulk-upload`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const getNgoPeople = (ngoId: string) =>
+  api.get(`/ngo/${ngoId}/people`);
 
 /* =========================
    Community / Campaign APIs
    ========================= */
 export const getCommunityMembers = () => api.get("/community/members");
+
 export const getCameraRequests = () => api.get("/community/camera-requests");
+
 export const createCameraRequest = (data: {
   cameraType?: string;
   location?: string;
   description?: string;
 }) => api.post("/community/camera-requests", data);
+
 export const updateCameraRequestStatus = (id: string, status: string) =>
   api.put(`/community/camera-requests/${id}`, { status });
+
 export const getAwarenessCampaigns = () => api.get("/community/campaigns");
+
 export const createCampaign = (data: {
   title: string;
   location: string;
@@ -70,11 +101,10 @@ export const createCampaign = (data: {
         Police APIs
    ========================= */
 export const uploadBulkMissingPersons = (formData: FormData) =>
-  api.post("/police/upload-bulk", formData);
+  api.post("/police/upload-bulk", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 
 export const getMissingPersons = () => api.get("/police/missing-persons");
 
-/* =========================
-       Default export
-   ========================= */
 export default api;

@@ -1,3 +1,4 @@
+// src/scripts/seedData.ts
 import mongoose from "mongoose";
 import { connectDB } from "../utils/database";
 import CommunityMember from "../models/CommunityMember";

@@ -15,31 +15,47 @@ export default function Login() {
     e.preventDefault();
     try {
       setLoading(true);
+
+      // Call backend
       const { data } = await api.post("/auth/login", formData);
 
-      // Police must be verified
-      if (data.role === "police" && data.verificationStatus !== "verified") {
+      // ✅ Extract correctly (works for both flat and nested response)
+      const token = data.token;
+      const role = data.role || data.user?.role;
+      const verificationStatus =
+        data.verificationStatus || data.user?.verificationStatus;
+      const policeRole = data.policeRole || data.user?.policeRole;
+      const stationId = data.stationId || data.user?.stationId;
+
+      if (!token || !role) {
+        alert("Login failed: Invalid response from server.");
+        return;
+      }
+
+      // 🚨 Police must be verified before login
+      if (role === "police" && verificationStatus !== "verified") {
         alert(
-          `Your police account is not verified yet (status: ${data.verificationStatus}). Please complete verification or wait for approval.`
+          `Your police account is not verified yet (status: ${verificationStatus}). Please wait for approval.`
         );
         return;
       }
 
-      // Store useful info for client-side gating
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role || "");
-      if (data.role === "police") {
-        localStorage.setItem("policeRole", data.policeRole || "");
-        localStorage.setItem("stationId", data.stationId || "");
-        localStorage.setItem("verificationStatus", data.verificationStatus || "");
+      // ✅ Save info to localStorage
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", role);
+
+      if (role === "police") {
+        localStorage.setItem("policeRole", policeRole || "");
+        localStorage.setItem("stationId", stationId || "");
+        localStorage.setItem("verificationStatus", verificationStatus || "");
       } else {
         localStorage.removeItem("policeRole");
         localStorage.removeItem("stationId");
         localStorage.removeItem("verificationStatus");
       }
 
-      // Redirects
-      switch (data.role) {
+      // ✅ Redirects based on role
+      switch (role) {
         case "community":
           navigate("/dashboard/community");
           break;

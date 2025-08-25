@@ -5,7 +5,8 @@ import api from "../utils/api";
 
 const Signup = () => {
   const navigate = useNavigate();
-  // ✅ use 'citizen' instead of 'family' to match backend enum
+
+  // ✅ roles include "citizen" not "family"
   const [role, setRole] = useState<"community" | "ngo" | "police" | "citizen">("community");
 
   const [formData, setFormData] = useState({
@@ -70,7 +71,7 @@ const Signup = () => {
       setLoading(true);
 
       if (role === "police" || role === "ngo") {
-        // --- multipart/form-data for file upload ---
+        // multipart/form-data for uploads
         const fd = new FormData();
         fd.append("name", formData.name);
         fd.append("email", formData.email);
@@ -86,8 +87,7 @@ const Signup = () => {
           fd.append("officialEmail", police.officialEmail);
           fd.append("badgeNumber", police.badgeNumber);
           if (police.idCardFile) {
-            // ✅ backend expects field name 'idCard'
-            fd.append("idCard", police.idCardFile);
+            fd.append("idCard", police.idCardFile); // backend expects "idCard"
           }
         }
 
@@ -95,8 +95,7 @@ const Signup = () => {
           fd.append("ngoName", ngo.ngoName);
           fd.append("ngoRegNumber", ngo.ngoRegNumber);
           if (ngo.licenseFile) {
-            // ✅ backend expects field name 'license'
-            fd.append("license", ngo.licenseFile);
+            fd.append("license", ngo.licenseFile); // backend expects "license"
           }
         }
 
@@ -104,7 +103,7 @@ const Signup = () => {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        // --- JSON for community/citizen ---
+        // JSON for community/citizen
         const payload = { ...formData, role };
         await api.post("/auth/register", payload);
       }
@@ -121,7 +120,10 @@ const Signup = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md w-full max-w-lg">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-xl shadow-md w-full max-w-lg"
+      >
         <h2 className="text-xl font-bold mb-4">Signup</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -133,13 +135,19 @@ const Signup = () => {
           <input name="organization" placeholder="Organization (optional)" onChange={handleChange} className="border w-full p-2 rounded" />
         </div>
 
-        <select name="role" value={role} onChange={handleChange} className="border w-full p-2 mt-3 rounded">
+        <select
+          name="role"
+          value={role}
+          onChange={handleChange}
+          className="border w-full p-2 mt-3 rounded"
+        >
           <option value="community">Community Member</option>
-          <option value="citizen">Family</option> {/* ✅ value matches backend enum */}
+          <option value="citizen">Family</option> {/* value must be "citizen" */}
           <option value="ngo">NGO</option>
           <option value="police">Police</option>
         </select>
 
+        {/* Police fields */}
         {role === "police" && (
           <div className="mt-4 space-y-3 border rounded p-3 bg-gray-50">
             <h3 className="font-semibold">Police Verification Details</h3>
@@ -149,7 +157,7 @@ const Signup = () => {
                 <option value="officer">Officer</option>
                 <option value="main">Main Police (Station Head)</option>
               </select>
-              <input name="officialEmail" placeholder="Official Email (e.g., name@police.gov)" type="email" onChange={handlePoliceChange} className="border w-full p-2 rounded" required />
+              <input name="officialEmail" placeholder="Official Email" type="email" onChange={handlePoliceChange} className="border w-full p-2 rounded" required />
               <input name="badgeNumber" placeholder="Badge/Service Number" onChange={handlePoliceChange} className="border w-full p-2 rounded" required />
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm mb-1">Upload Police ID Card</label>
@@ -160,6 +168,7 @@ const Signup = () => {
           </div>
         )}
 
+        {/* NGO fields */}
         {role === "ngo" && (
           <div className="mt-4 space-y-3 border rounded p-3 bg-gray-50">
             <h3 className="font-semibold">NGO Founder Verification</h3>
@@ -175,7 +184,11 @@ const Signup = () => {
           </div>
         )}
 
-        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white py-2 rounded mt-4 disabled:opacity-60">
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-green-600 text-white py-2 rounded mt-4 disabled:opacity-60"
+        >
           {loading ? "Creating account..." : "Signup"}
         </button>
       </form>

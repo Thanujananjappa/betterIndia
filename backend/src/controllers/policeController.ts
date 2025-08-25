@@ -166,22 +166,23 @@ export const uploadBulkMissingPersons = async (
       const priority = pick(row, ["priority"], "medium");
 
       const newPersonData: any = {
-        name,
-        age: ageNum,
-        gender,
-        lastSeen,
-        lastSeenLocation,
-        photo: photoUrl,
-        reportedBy: req.user!._id, // uploader
-        status: "missing",
-        blockchainHash: "",
-        physicalFeatures,
-        clothing,
-        description,
-        reportedByPhone,
-        languages: languages.length ? languages : ["English"],
-        priority,
-      };
+  name,
+  age: ageNum,
+  gender,
+  lastSeen,
+  lastSeenLocation,
+  photo: photoUrl,
+  reportedBy: req.user!._id, // uploader
+  reportedByRole: "police",  // 👈 default role
+  status: "missing",
+  blockchainHash: "",
+  physicalFeatures,
+  clothing,
+  description,
+  reportedByPhone,
+  languages: languages.length ? languages : ["English"],
+  priority,
+};
 
       // Blockchain hash
       const dataHash = blockchain.generateDataHash(newPersonData);

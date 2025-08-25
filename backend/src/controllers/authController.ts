@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import User, { IUserDocument } from "../models/User";
+import { memberService } from "../services/memberService";
 
 /* -------------------- Helpers -------------------- */
-const generateToken = (id: string) =>
-  jwt.sign({ id }, process.env.JWT_SECRET || "secret", { expiresIn: "30d" });
+const generateToken = (id: string, role: string) =>
+  jwt.sign({ id, role }, process.env.JWT_SECRET || "secret", { expiresIn: "30d" });
 
 /* -------------------- Controllers -------------------- */
+
 /**
  * POST /api/auth/register
  */
@@ -44,11 +46,12 @@ export const registerUser = async (req: Request, res: Response): Promise<Respons
     }
 
     let extra: Partial<IUserDocument> = {};
-    const file = (req as any).file as Express.Multer.File | undefined;
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     /* --- Police --- */
     if (role === "police") {
-      const idCardFile = file && file.fieldname === "idCard" ? file : undefined;
+      const idCardFile = files?.idCard?.[0];
       extra = {
         stationId,
         policeRole,
@@ -62,7 +65,7 @@ export const registerUser = async (req: Request, res: Response): Promise<Respons
 
     /* --- NGO --- */
     if (role === "ngo") {
-      const licenseFile = file && file.fieldname === "license" ? file : undefined;
+      const licenseFile = files?.license?.[0];
       extra = {
         ngoName,
         ngoRegNumber,
@@ -83,27 +86,32 @@ export const registerUser = async (req: Request, res: Response): Promise<Respons
       ...extra,
     });
 
-    return res.status(201).json({
+    const payload: any = {
       _id: user._id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
       verificationStatus: user.verificationStatus,
-      token: generateToken(user._id.toString()),
-    });
+      token: generateToken(user._id.toString(), user.role),
+    };
+
+    if (user.role === "ngo") {
+      payload.ngoId = user._id.toString();
+      payload.ngoName = user.ngoName;
+    }
+
+    return res.status(201).json(payload);
   } catch (error: any) {
     if (error?.code === 11000) {
       if (error?.keyPattern?.email) {
         return res.status(400).json({ message: "Email already exists" });
       }
       if (error?.keyPattern?.stationId) {
-        return res.status(400).json({ message: "This station already has a Main Police account." });
+        return res
+          .status(400)
+          .json({ message: "This station already has a Main Police account." });
       }
     }
-    if (error?.name === "ValidationError" && error?.errors?.role) {
-      return res.status(400).json({ message: "Invalid role" });
-    }
-    console.error("Registration error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -125,30 +133,29 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    if (user.role === "police" && user.verificationStatus !== "verified") {
+    if (["police", "ngo"].includes(user.role) && user.verificationStatus !== "verified") {
       return res.status(403).json({
-        message: "Your police account is not approved yet.",
+        message: `Your ${user.role} account is not approved yet.`,
         verificationStatus: user.verificationStatus,
       });
     }
 
-    if (user.role === "ngo" && user.verificationStatus !== "verified") {
-      return res.status(403).json({
-        message: "Your NGO account is not approved yet. Please wait for admin approval.",
-        verificationStatus: user.verificationStatus,
-      });
-    }
-
-    return res.json({
+    const payload: any = {
       _id: user._id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
       verificationStatus: user.verificationStatus,
-      token: generateToken(user._id.toString()),
-    });
+      token: generateToken(user._id.toString(), user.role),
+    };
+
+    if (user.role === "ngo") {
+      payload.ngoId = user._id.toString();
+      payload.ngoName = user.ngoName;
+    }
+
+    return res.json(payload);
   } catch (error: any) {
-    console.error("Login error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -156,52 +163,58 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
 /**
  * GET /api/auth/me
  */
-export const getMe = async (req: Request & { user?: any }, res: Response): Promise<Response> => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
-
-    // 🔥 user already attached in protect middleware without password
-    return res.json(req.user);
-  } catch (error: any) {
-    console.error("GetMe error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+export const getMe = async (req: Request & { user?: any }, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authorized" });
   }
+  return res.json({
+    _id: req.user._id,
+    name: req.user.name,
+    email: req.user.email,
+    role: req.user.role,
+    verificationStatus: req.user.verificationStatus,
+    ngoId: req.user.role === "ngo" ? req.user._id : undefined,
+    ngoName: req.user.role === "ngo" ? req.user.ngoName : undefined,
+  });
 };
 
 /**
  * POST /api/auth/ngo/upload-license
  */
-export const uploadNgoLicense = async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+export const uploadNgoLicense = async (req: Request & { user?: any }, res: Response) => {
+  if (!req.user?._id) return res.status(401).json({ message: "Not authorized" });
+
+  const licenseFile = (req as any).file as Express.Multer.File | undefined;
+  if (!licenseFile) return res.status(400).json({ message: "License file required" });
+
+  const user = await User.findById(req.user._id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  if (user.role !== "ngo") return res.status(403).json({ message: "Only NGO accounts allowed" });
+
+  user.ngoLicenseUrl = `/uploads/licenses/${licenseFile.filename}`;
+  user.verificationStatus = "verified";
+  user.emailVerified = true;
+  await user.save();
+
+  return res.json({
+    message: "License uploaded. Account approved.",
+    ngoLicenseUrl: user.ngoLicenseUrl,
+    ngoId: user._id.toString(),
+    ngoName: user.ngoName,
+  });
+};
+
+/**
+ * POST /api/auth/ngo/bulk-upload
+ */
+export const uploadNgoBulk = async (req: Request & { user?: any }, res: Response) => {
   try {
-    if (!req.user?._id) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
+    if (!req.user?._id) return res.status(401).json({ message: "Not authorized" });
+    if (!req.file) return res.status(400).json({ message: "ZIP file required" });
 
-    const licenseFile = (req as any).file as Express.Multer.File | undefined;
-    if (!licenseFile) {
-      return res.status(400).json({ message: "License file required" });
-    }
-
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    if (user.role !== "ngo") {
-      return res.status(403).json({ message: "Only NGO accounts can upload a license" });
-    }
-
-    user.ngoLicenseUrl = `/uploads/licenses/${licenseFile.filename}`;
-    user.verificationStatus = "verified";
-    user.emailVerified = true;
-    await user.save();
-
-    return res.json({
-      message: "License uploaded. Account approved.",
-      ngoLicenseUrl: user.ngoLicenseUrl,
-    });
+    const result = await memberService.processBulkZip(req.file, req.user._id);
+    return res.json({ message: "Bulk upload completed", ...result });
   } catch (error: any) {
-    console.error("Upload NGO license error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: error.message || "Bulk upload failed" });
   }
 };
